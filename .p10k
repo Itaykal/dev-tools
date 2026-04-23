@@ -1,0 +1,34 @@
+# Powerlevel10k overrides — edit this file instead of ~/.p10k.zsh so `p10k configure`
+# can regenerate the main config without losing customizations. Source order: ~/.p10k.zsh
+# first, then this file (see ~/.zshrc).
+
+# Kubernetes: own line at top-left above dir/vcs; hide duplicate on the right prompt.
+# Show only while typing common k8s CLI commands.
+if [[ ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[1]} != kubecontext ]]; then
+  typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
+    kubecontext
+    newline
+    ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[@]}
+  )
+fi
+if (( ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[(I)kubecontext]} )); then
+  typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[@]:#kubecontext})
+fi
+typeset -g POWERLEVEL9K_KUBECONTEXT_SHOW_ON_COMMAND='kubectl|helm|kubens|kubectx|oc|istioctl|kogito|k9s|helmfile|flux|fluxctl|stern|kubeseal|skaffold|kubent|kubecolor|cmctl|sparkctl'
+
+# AWS: right prompt, right after command_execution_time.
+# Show only while typing AWS/IaC commands.
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[@]:#aws})
+local _aws_idx=${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[(i)command_execution_time]}
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
+  ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[1,$_aws_idx]}
+  aws
+  ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[$((_aws_idx+1)),-1]}
+)
+
+typeset -g POWERLEVEL9K_AWS_SHOW_ON_COMMAND='aws|awless|cdk|terraform|tofu|pulumi|terragrunt|tf|tg'
+# Show: account-slug  account-id  role  region  (all exported by aws-switch)
+typeset -g POWERLEVEL9K_AWS_CONTENT_EXPANSION='${AWS_ACCOUNT_NAME:-${P9K_AWS_PROFILE//\%/%%}}${AWS_ACCOUNT_ID:+  ${AWS_ACCOUNT_ID//\%/%%}}${AWS_ROLE_NAME:+  ${AWS_ROLE_NAME//\%/%%}}${P9K_AWS_REGION:+  ${P9K_AWS_REGION//\%/%%}}'
+
+(( $+functions[p10k] )) && p10k reload
+

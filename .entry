@@ -1,0 +1,3 @@
+for file in .vars .alias .functions .p10k; do
+	source ~/kalfon-dotfiles/$file
+done
