@@ -22,7 +22,7 @@ typeset -g POWERLEVEL9K_KUBECONTEXT_CLASSES=(
   # '(#i)*live*'  PROD
   '*'             DEFAULT)
 typeset -g POWERLEVEL9K_KUBECONTEXT_PROD_FOREGROUND=196    # red    — used when class is PROD
-typeset -g POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND=134 # purple — default
+typeset -g POWERLEVEL9K_KUBECONTEXT_DEFAULT_FOREGROUND=76   # green  — default
 
 # AWS: own line at top-left, below kubecontext, above dir/vcs. Always visible.
 if [[ ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[3]} != aws ]]; then
