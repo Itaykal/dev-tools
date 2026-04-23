@@ -26,6 +26,7 @@ typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
   ${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[$((_aws_idx+1)),-1]}
 )
 
+unset POWERLEVEL9K_AWS_SHOW_ON_COMMAND
 # Show: account-slug  account-id  role  region  (all exported by aws-switch)
 typeset -g POWERLEVEL9K_AWS_CONTENT_EXPANSION='${AWS_ACCOUNT_NAME:-${P9K_AWS_PROFILE//\%/%%}}${AWS_ACCOUNT_ID:+  ${AWS_ACCOUNT_ID//\%/%%}}${AWS_ROLE_NAME:+  ${AWS_ROLE_NAME//\%/%%}}${P9K_AWS_REGION:+  ${P9K_AWS_REGION//\%/%%}}'
 
