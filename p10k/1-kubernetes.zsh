@@ -1,9 +1,8 @@
-# Kubernetes: own line at top-left above dir/vcs; hide duplicate on the right prompt.
+# Kubernetes: inline with aws on the top line; hide duplicate on the right prompt.
 # Show only while typing common k8s CLI commands.
 if [[ ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[1]} != kubecontext ]]; then
   typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
     kubecontext
-    newline
     ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[@]}
   )
 fi

@@ -1,11 +1,11 @@
-# AWS: own line at top-left, below kubecontext, above dir/vcs. Always visible.
-# Depends on 1-kubernetes.zsh having run first (kubecontext at [1], newline at [2]).
-if [[ ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[3]} != aws ]]; then
+# AWS: inline with kubecontext on the top line, followed by a newline, then dir/vcs.
+# Depends on 1-kubernetes.zsh having run first (kubecontext at [1]).
+if [[ ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[2]} != aws ]]; then
   typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
-    ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[1,2]}
+    ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[1]}
     aws
     newline
-    ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[3,-1]}
+    ${POWERLEVEL9K_LEFT_PROMPT_ELEMENTS[2,-1]}
   )
 fi
 typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(${POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS[@]:#aws})
