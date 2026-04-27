@@ -1,27 +1,37 @@
 # Re-auth via the existing "session" SSO session if needed, pick a real account
 # from the portal with fzf, then write it into [profile default] and export env vars.
 function aws-switch() {
-  if ! aws sts get-caller-identity --profile default &>/dev/null; then
-    echo "SSO session expired — logging in..."
-    aws sso login --sso-session session || return 1
-  fi
-
-  local sso_region
+  local sso_region sso_start_url
   sso_region=$(awk '/\[sso-session session\]/{f=1} f && /^sso_region/{print $3; exit}' ~/.aws/config)
   sso_region=${sso_region:-eu-west-1}
+  sso_start_url=$(awk '/\[sso-session session\]/{f=1} f && /^sso_start_url/{print $3; exit}' ~/.aws/config)
 
-  local token
-  token=$(jq -rs '[.[] | select(.accessToken != null)] | sort_by(.expiresAt) | last | .accessToken' \
-    ~/.aws/sso/cache/*.json 2>/dev/null)
-  [[ -z "$token" ]] && { echo "Could not read SSO token" >&2; return 1; }
+  # Pick the token cached for this sso-session's start_url (not just the latest file).
+  _aws_switch_token() {
+    jq -rs --arg url "$sso_start_url" '
+      [.[] | select(.accessToken != null and (.startUrl == $url or $url == ""))]
+      | sort_by(.expiresAt) | last | .accessToken // empty
+    ' ~/.aws/sso/cache/*.json 2>/dev/null
+  }
+
+  local token accounts
+  token=$(_aws_switch_token)
+  if [[ -n "$token" ]]; then
+    accounts=$(aws sso list-accounts --access-token "$token" --region "$sso_region" --output json 2>/dev/null)
+  fi
+
+  # If no token, or list-accounts failed/empty, the SSO token is expired — log in and retry.
+  if [[ -z "$accounts" ]] || ! jq -e '.accountList | length > 0' <<<"$accounts" >/dev/null 2>&1; then
+    echo "SSO session expired — logging in..."
+    aws sso login --sso-session session || return 1
+    token=$(_aws_switch_token)
+    [[ -z "$token" ]] && { echo "Could not read SSO token after login" >&2; return 1; }
+    accounts=$(aws sso list-accounts --access-token "$token" --region "$sso_region" --output json) || return 1
+  fi
 
   # Aligned two-column list: account name (fixed 35 chars) + account ID
   local selection
-  selection=$(aws sso list-accounts \
-    --access-token "$token" \
-    --region "$sso_region" \
-    --output json 2>/dev/null \
-    | jq -r '.accountList[] | [.accountName, .accountId] | @tsv' \
+  selection=$(jq -r '.accountList[] | [.accountName, .accountId] | @tsv' <<<"$accounts" \
     | sort \
     | awk 'BEGIN{FS="\t"} {printf "%-35s %s\n", $1, $2}' \
     | fzf --prompt="AWS account: " --height=40% --reverse) || return 1
