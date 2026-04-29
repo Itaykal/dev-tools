@@ -55,11 +55,14 @@ function aws-switch() {
     role_name="$roles"
   fi
 
-  # Overwrite the fixed 'default' profile
-  aws configure set sso_session   session     --profile default
-  aws configure set sso_account_id "$acct_id"  --profile default
-  aws configure set sso_role_name  "$role_name" --profile default
-  aws configure set region         "$sso_region" --profile default
+  # Overwrite the fixed 'default' profile.
+  # sso_account_name is non-standard but AWS CLI ignores unknown keys; aws-sync-prompt reads it
+  # so other terminals can show the account name without depending on this shell's env.
+  aws configure set sso_session     session       --profile default
+  aws configure set sso_account_id  "$acct_id"    --profile default
+  aws configure set sso_account_name "$acct_name" --profile default
+  aws configure set sso_role_name   "$role_name"  --profile default
+  aws configure set region          "$sso_region" --profile default
 
   export AWS_PROFILE=default
   export AWS_VAULT="$acct_name"       # p10k reads AWS_VAULT before AWS_PROFILE for display & class matching
