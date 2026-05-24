@@ -57,6 +57,23 @@ else
   ln -s "$src" "$target"
 fi
 
+echo "==> Cursor merge-windows LaunchAgent"
+AGENT_LABEL="com.itayka.cursor-merge-windows"
+AGENT_SRC="$REPO_DIR/macos/cursor-merge-windows/$AGENT_LABEL.plist"
+AGENT_DIR="$HOME/Library/LaunchAgents"
+AGENT_DST="$AGENT_DIR/$AGENT_LABEL.plist"
+mkdir -p "$AGENT_DIR"
+if [[ -L "$AGENT_DST" && "$(readlink "$AGENT_DST")" == "$AGENT_SRC" ]]; then
+  echo "    already linked"
+else
+  ln -sfn "$AGENT_SRC" "$AGENT_DST"
+  echo "    linked $AGENT_DST -> $AGENT_SRC"
+fi
+DOMAIN="gui/$(id -u)"
+launchctl bootout "$DOMAIN/$AGENT_LABEL" 2>/dev/null || true
+launchctl bootstrap "$DOMAIN" "$AGENT_DST"
+echo "    loaded (first run will prompt for Accessibility permission for osascript)"
+
 echo "==> ~/.zshrc"
 if [[ -f "$ZSHRC" ]] && grep -qF "$ENTRY" "$ZSHRC"; then
   echo "    .entry already sourced"
