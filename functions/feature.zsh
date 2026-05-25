@@ -2,23 +2,34 @@
 # Press ctrl-n inside the picker to create a new Task with the typed query as the
 # summary, transition it to In Progress, and use it for the branch.
 function feature() {
-  local fzf_out
-  fzf_out=$(jira issue list \
-      -s~Done -s~Archived -s~"To Do" -s~"In Review" \
+  # Path to the ADF renderer jq script (next to this file). %x is the file where
+  # the function was defined, which is what we want even when invoked elsewhere.
+  local adf_jq="${${(%):-%x}:A:h}/feature-adf.jq"
+
+  local list_raw
+  list_raw=$(jira issue list \
+      -s~Done -s~Archived \
       -t~Epic \
       -a itayka@dreamgroup.com \
-      --columns TYPE,KEY,SUMMARY,STATUS --csv \
-    | column -s, -t \
-    | fzf \
+      --plain --columns TYPE,KEY,SUMMARY,STATUS --delimiter '|' 2>/dev/null) || return 1
+
+  # Truncate SUMMARY so TYPE/KEY/STATUS stay on-screen. fzf still matches on the
+  # visible (possibly truncated) text; the full summary is looked up by KEY below.
+  local summary_max=$(( ${COLUMNS:-160} * 65 / 100 - 38 ))
+  (( summary_max < 30 )) && summary_max=30
+
+  local fzf_out
+  fzf_out=$(print -r -- "$list_raw" \
+    | awk -F'|' -v OFS='|' -v max=$summary_max '
+        NR==1 { print; next }
+        { if (length($3) > max) $3 = substr($3, 1, max-3) "..."; print }' \
+    | column -s '|' -t \
+    | FEATURE_ADF_JQ="$adf_jq" fzf \
         --print-query \
         --expect=ctrl-n \
         --header 'ctrl-n: create new task with the typed summary' \
         --header-lines=1 \
-        --preview 'key=$(echo {} | awk "{print \$2}"); printf "\033[2;37m  loading %s...\033[0m\n" "$key"; out=$(jira issue view "$key" --raw 2>/dev/null); clear; echo "$out" | jq -r "
-          \"\(.fields.issuetype.name)  •  \(.fields.status.name)  •  \(.fields.assignee.displayName // \"Unassigned\")\n\",
-          \"# \(.fields.summary)\n\",
-          (.fields.description // \"_No description_\")
-        "' \
+        --preview 'key=$(echo {} | awk "{print \$2}"); printf "\033[2;37m  loading %s...\033[0m\n" "$key"; out=$(jira issue view "$key" --raw 2>/dev/null); clear; print -r -- "$out" | jq -r -f "$FEATURE_ADF_JQ"' \
         --preview-window='right:35%:wrap,border-rounded' \
         --preview-label=' issue ')
   # Note: do not bail on non-zero exit — fzf returns 1 when ctrl-n is pressed with no
@@ -59,16 +70,18 @@ function feature() {
       | tr '[:upper:]' '[:lower:]')
     branch_name="${key}-${slug}"
   elif [[ -n "$selection" ]]; then
-    branch_name=$(print -r -- "$selection" | awk '{
-        key=$2
-        summary=""
-        for(i=3;i<=NF-3;i++) summary = summary " " $i
-        gsub(/[^a-zA-Z0-9 -]/, "", summary)
-        gsub(/  +/, " ", summary)
-        sub(/^ +/, "", summary); sub(/ +$/, "", summary)
-        gsub(/ /, "-", summary)
-        print toupper(key) "-" tolower(summary)
-      }')
+    # Pull KEY from the visible line; look up full (untruncated) summary from list_raw.
+    local key full_summary slug
+    key=$(print -r -- "$selection" | awk '{print $2}')
+    [[ -z "$key" ]] && return 1
+    full_summary=$(print -r -- "$list_raw" | awk -F'|' -v k="$key" '$2 == k { print $3; exit }')
+    slug=$(print -r -- "$full_summary" \
+      | tr -c 'a-zA-Z0-9 -' ' ' \
+      | tr -s ' ' \
+      | sed 's/^ *//; s/ *$//' \
+      | tr ' ' '-' \
+      | tr '[:upper:]' '[:lower:]')
+    branch_name="${key}-${slug}"
   else
     return 1
   fi
