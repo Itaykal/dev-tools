@@ -32,7 +32,14 @@ function feature() {
     }
   fi
 
+  # Point at the in-repo config (which re-adds my team's squad field on top of
+  # the binary's generic defaults) unless an explicit $FEATURE_CONFIG wins.
+  local -a cfg_args
+  if [[ -z "$FEATURE_CONFIG" && -f "$root/config.toml" ]]; then
+    cfg_args=(--config "$root/config.toml")
+  fi
+
   # The binary runs the picker, then runs `git checkout -b` itself; that touches
   # .git on disk, so the current shell ends up on the new branch.
-  "$bin" "$@"
+  "$bin" "${cfg_args[@]}" "$@"
 }

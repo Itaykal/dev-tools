@@ -4,7 +4,9 @@
 # edit. Anything you omit falls back to the built-in defaults shown below.
 
 # Account whose issues are listed and who new issues are assigned to.
-assignee = "itayka@dreamgroup.com"
+# Leave empty (or omit) to use the currently authenticated Jira user — the tool
+# resolves it via `jira me`, so you usually don't need to set this.
+assignee = ""
 
 # The jira CLI executable (a full path works too).
 jira_bin = "jira"
@@ -19,8 +21,9 @@ exclude_types = ["Epic"]
 move_to = "In Progress"
 
 [create.custom]
-# Extra fields set on create, passed as `--custom key=value`.
-squad = "Detection"
+# Optional team-specific fields set on create, passed as `--custom key=value`.
+# None by default. Uncomment and adjust for your team, e.g.:
+# squad = "Detection"
 
 [aliases]
 # Query-prefix -> issue type. Type "<prefix> some text" in the picker to filter

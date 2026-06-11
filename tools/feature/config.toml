@@ -1,0 +1,10 @@
+# Personal config for this machine, kept in the dotfiles repo (not ~/.config).
+# functions/feature.zsh points the binary here via --config when $FEATURE_CONFIG
+# is unset. Anything omitted falls back to the built-in defaults, so this only
+# needs to hold what differs from them.
+#
+# The shipped binary's defaults are intentionally generic (assignee = current
+# jira user, no custom fields); this file re-adds my team's squad field.
+
+[create.custom]
+squad = "Detection"

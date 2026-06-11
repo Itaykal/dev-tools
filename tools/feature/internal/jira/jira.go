@@ -26,6 +26,7 @@ var keyRe = regexp.MustCompile(`[A-Z][A-Z0-9_]+-[0-9]+`)
 // Provider is the jira-CLI-backed tracker.Provider.
 type Provider struct {
 	cfg config.Config
+	me  string // cached current-user account, resolved lazily via `jira me`
 }
 
 // New returns a Provider configured from cfg.
@@ -33,10 +34,33 @@ func New(cfg config.Config) *Provider {
 	return &Provider{cfg: cfg}
 }
 
+// assignee returns the account to list/create issues for: the configured
+// Assignee, or the currently authenticated user (`jira me`) when unset. The
+// result is cached so we shell out at most once.
+func (p *Provider) assignee(ctx context.Context) (string, error) {
+	if p.cfg.Assignee != "" {
+		return p.cfg.Assignee, nil
+	}
+	if p.me != "" {
+		return p.me, nil
+	}
+	out, err := p.run(ctx, nil, "me")
+	if err != nil {
+		return "", fmt.Errorf("could not resolve current user via `jira me` (is the jira CLI set up? run `jira init`): %w\n%s", err, out)
+	}
+	p.me = strings.TrimSpace(out)
+	return p.me, nil
+}
+
 var _ tracker.Provider = (*Provider)(nil)
 
 // List runs `jira issue list` with the configured filters and parses the table.
 func (p *Provider) List(ctx context.Context) ([]tracker.Issue, error) {
+	assignee, err := p.assignee(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	args := []string{"issue", "list"}
 	for _, s := range p.cfg.List.ExcludeStatuses {
 		args = append(args, "-s~"+s)
@@ -44,8 +68,8 @@ func (p *Provider) List(ctx context.Context) ([]tracker.Issue, error) {
 	for _, t := range p.cfg.List.ExcludeTypes {
 		args = append(args, "-t~"+t)
 	}
-	if p.cfg.Assignee != "" {
-		args = append(args, "-a", p.cfg.Assignee)
+	if assignee != "" {
+		args = append(args, "-a", assignee)
 	}
 	args = append(args, "--plain", "--columns", "TYPE,KEY,SUMMARY,STATUS,ASSIGNEE", "--delimiter", listDelim)
 
@@ -80,9 +104,14 @@ func (p *Provider) Create(ctx context.Context, req tracker.CreateRequest) (strin
 		typ = tracker.TypeTask
 	}
 
+	assignee, err := p.assignee(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	args := []string{"issue", "create", "--no-input", "-t", string(typ), "-s", summary}
-	if p.cfg.Assignee != "" {
-		args = append(args, "-a", p.cfg.Assignee)
+	if assignee != "" {
+		args = append(args, "-a", assignee)
 	}
 	for _, kv := range sortedCustom(p.cfg.Create.Custom) {
 		args = append(args, "--custom", kv)

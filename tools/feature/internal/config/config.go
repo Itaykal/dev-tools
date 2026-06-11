@@ -40,11 +40,13 @@ type CreateConfig struct {
 	Custom map[string]string `toml:"custom"`
 }
 
-// Default mirrors the values the zsh tool hardcoded, so the tool works out of
-// the box with no config file present.
+// Default is the out-of-the-box config: generic enough to work for any user
+// with no config file. Assignee is left empty on purpose — the Jira provider
+// resolves it to the currently authenticated user (`jira me`), so everyone
+// sees their own open issues without configuring anything.
 func Default() Config {
 	return Config{
-		Assignee: "itayka@dreamgroup.com",
+		Assignee: "",
 		JiraBin:  "jira",
 		List: ListConfig{
 			ExcludeStatuses: []string{"Done", "Archived"},
@@ -52,7 +54,9 @@ func Default() Config {
 		},
 		Create: CreateConfig{
 			MoveTo: "In Progress",
-			Custom: map[string]string{"squad": "Detection"},
+			// No custom fields by default — team-specific fields (e.g. a squad)
+			// are opt-in via [create.custom] in the config file.
+			Custom: nil,
 		},
 		Aliases: map[string]string{
 			"b": "Bug", "bug": "Bug",
