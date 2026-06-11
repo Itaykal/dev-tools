@@ -1,2 +1,5 @@
 .a5c/
 .DS_Store
+
+# feature: compiled Go binary (built on demand by functions/feature.zsh)
+tools/feature/bin/
