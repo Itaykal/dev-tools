@@ -1,0 +1,7 @@
+# feature — in-repo config. install.sh symlinks this to
+# ~/.config/feature/config.toml. The shipped defaults are generic (assignee =
+# current jira user, no custom fields); this file re-adds my team's squad field.
+# Anything omitted falls back to the built-in defaults — see feature.example.toml.
+
+[create.custom]
+squad = "Detection"

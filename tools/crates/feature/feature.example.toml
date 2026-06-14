@@ -1,0 +1,37 @@
+# Example feature config. Copy to ~/.config/feature/config.toml and edit.
+# Every key is optional; omitted keys fall back to the defaults shown here.
+
+# Account whose issues are listed / who new issues are assigned to.
+# Empty = the current jira user (resolved via `jira me`).
+assignee = ""
+# The jira CLI executable.
+jira_bin = "jira"
+
+# Cache the issue list this long (seconds) so warm runs show instantly while a
+# refresh runs in the background. Short, since issues change often; ctrl-r
+# force-refreshes anytime. 0 disables caching.
+cache_ttl_secs = 60
+
+[list]
+exclude_statuses = ["Done", "Archived"]
+exclude_types = ["Epic"]
+
+[create]
+# Status to transition a freshly created issue to (best-effort).
+move_to = "In Progress"
+
+# Custom fields applied on create, e.g. a team/squad field.
+[create.custom]
+# squad = "Detection"
+
+# Query prefixes (typed as "/b", "/t …") that filter the list by issue type.
+[aliases]
+b = "Bug"
+bug = "Bug"
+t = "Task"
+task = "Task"
+s = "Story"
+story = "Story"
+st = "Sub-task"
+sub = "Sub-task"
+subtask = "Sub-task"

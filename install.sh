@@ -36,6 +36,41 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 brew bundle --file="$REPO_DIR/Brewfile"
 
+echo "==> rust tools"
+if command -v cargo >/dev/null 2>&1; then
+  make -C "$REPO_DIR/tools" build
+else
+  echo "    cargo not found — skipping (brew bundle installs rust; open a new shell and re-run)" >&2
+fi
+
+echo "==> linking aws-switch config"
+ASW_CFG_DIR="$HOME/.config/aws-switch"
+mkdir -p "$ASW_CFG_DIR"
+asw_target="$ASW_CFG_DIR/config.toml"
+asw_src="$REPO_DIR/tools/crates/aws-switch/config.toml"
+if [[ -L "$asw_target" && "$(readlink "$asw_target")" == "$asw_src" ]]; then
+  echo "    already linked"
+elif [[ -e "$asw_target" ]]; then
+  echo "    existing $asw_target found, leaving it in place"
+else
+  ln -s "$asw_src" "$asw_target"
+  echo "    linked $asw_target -> $asw_src"
+fi
+
+echo "==> linking feature config"
+FEAT_CFG_DIR="$HOME/.config/feature"
+mkdir -p "$FEAT_CFG_DIR"
+feat_target="$FEAT_CFG_DIR/config.toml"
+feat_src="$REPO_DIR/tools/crates/feature/config.toml"
+if [[ -L "$feat_target" && "$(readlink "$feat_target")" == "$feat_src" ]]; then
+  echo "    already linked"
+elif [[ -e "$feat_target" ]]; then
+  echo "    existing $feat_target found, leaving it in place"
+else
+  ln -s "$feat_src" "$feat_target"
+  echo "    linked $feat_target -> $feat_src"
+fi
+
 echo "==> linking k9s/views.yaml"
 mkdir -p "$K9S_CFG"
 target="$K9S_CFG/views.yaml"

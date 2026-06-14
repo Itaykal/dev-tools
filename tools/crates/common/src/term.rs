@@ -1,0 +1,60 @@
+//! Terminal setup with guaranteed restore.
+//!
+//! ratatui (unlike bubbletea) does not clean up after itself, so a panic or
+//! Ctrl-C mid-picker would otherwise leave the shell in raw mode. [`TermGuard`]
+//! restores raw mode and the cursor on drop, no matter how we leave the scope.
+//!
+//! The picker renders *inline* (it reserves a few lines below the prompt rather
+//! than taking over the whole screen, like fzf), and draws to stderr so stdout
+//! stays free for machine-readable output.
+
+use std::io::{self, Stderr};
+
+use anyhow::Result;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use ratatui::{backend::CrosstermBackend, Terminal, TerminalOptions, Viewport};
+
+pub type Tui = Terminal<CrosstermBackend<Stderr>>;
+
+/// Owns an inline ratatui terminal and restores cooked mode on drop.
+pub struct TermGuard {
+    terminal: Tui,
+}
+
+impl TermGuard {
+    /// Enter raw mode and create an inline viewport `height` lines tall.
+    pub fn inline(height: u16) -> Result<Self> {
+        enable_raw_mode()?;
+        let backend = CrosstermBackend::new(io::stderr());
+        // If terminal setup fails after raw mode is on, disable it here: the
+        // `Drop` guard only runs once `Self` exists, so an early return would
+        // otherwise strand the shell in raw mode.
+        let terminal = Terminal::with_options(
+            backend,
+            TerminalOptions {
+                viewport: Viewport::Inline(height),
+            },
+        )
+        .inspect_err(|_| {
+            let _ = disable_raw_mode();
+        })?;
+        Ok(Self { terminal })
+    }
+
+    pub fn terminal(&mut self) -> &mut Tui {
+        &mut self.terminal
+    }
+
+    /// Wipe the inline viewport so the prompt returns cleanly. Call on the
+    /// normal exit path; the Drop guard still runs if you don't.
+    pub fn cleanup(&mut self) {
+        let _ = self.terminal.clear();
+    }
+}
+
+impl Drop for TermGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let _ = self.terminal.show_cursor();
+    }
+}

@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = ["crates/common", "crates/aws-switch", "crates/feature"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.96"
+
+# Shared dependency versions — crates pull these in with `dep.workspace = true`.
+[workspace.dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+nucleo-matcher = "0.3"
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+ureq = { version = "2", features = ["json"] }
+pulldown-cmark = { version = "0.12", default-features = false }
+
+# Smaller, faster release binaries for the installed tools.
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1

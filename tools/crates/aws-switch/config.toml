@@ -1,0 +1,18 @@
+# aws-switch — in-repo config. install.sh symlinks this to
+# ~/.config/aws-switch/config.toml. Override per-machine there, via
+# $AWS_SWITCH_CONFIG, or with --config. Defaults match the CLAUDE.md invariants,
+# so this file is mostly documentation.
+
+sso_session = "session"   # SSO session name in ~/.aws/config
+profile     = "default"   # profile to overwrite
+region      = "eu-west-1"  # fallback SSO region if ~/.aws/config lacks one
+
+# Cache the account list this long (seconds) so warm runs skip the network.
+# 0 disables caching. `aws-switch --refresh` always refetches.
+cache_ttl_secs = 43200    # 12h
+
+# Account names to hide from the picker.
+# exclude_accounts = ["some-account"]
+
+# Auto-pick this role (skip the role picker) when it's available.
+# default_role = "AdministratorAccess"

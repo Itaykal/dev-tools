@@ -1,0 +1,18 @@
+# Example aws-switch config. Copy to ~/.config/aws-switch/config.toml and edit.
+# Every key is optional; omitted keys fall back to the defaults shown here.
+
+sso_session = "session"     # SSO session name in ~/.aws/config
+profile     = "default"     # profile aws-switch overwrites
+region      = "eu-west-1"   # fallback SSO region
+
+# Cache the account list this long (seconds) so warm runs skip the network
+# call and show the picker instantly. 0 disables caching. Run
+# `aws-switch --refresh` to force a refetch regardless.
+cache_ttl_secs = 43200      # 12h
+
+# Hide accounts from the picker by name.
+exclude_accounts = []
+
+# Auto-pick this role when it exists for the chosen account, skipping the
+# role picker. Leave unset to always prompt when there's more than one role.
+# default_role = "AdministratorAccess"
