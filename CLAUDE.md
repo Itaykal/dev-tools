@@ -45,8 +45,9 @@ What happens: `.github/workflows/release.yml` triggers on `v*` tags, builds the 
 
 **New tools need no workflow edits** — add the binary crate under `tools/crates/<tool>/`; the packaging loop discovers any crate with a `[[bin]]` automatically (library crates like `common` are skipped).
 
-`install.sh` auto-discovers every `[[bin]]` crate under `tools/crates/` and, on Apple Silicon macOS, downloads each tool's tarball from the latest release (`releases/latest/download/<tool>-aarch64-apple-darwin.tar.gz`) into `tools/bin/`. If any download fails, it falls back to building everything from source via `make -C tools build`.
+`install.sh` auto-discovers every `[[bin]]` crate under `tools/crates/` and, on Apple Silicon macOS with `gh` available, downloads each tool's tarball from the latest release into `tools/bin/` via `gh release download`. The repo is **private**, so the download is authenticated through `gh` — if `gh` is missing or not logged in (e.g. a fresh machine before `gh auth login`), it falls back to building everything from source via `make -C tools build`.
 
 Caveats:
 - Releases are built only for `aarch64-apple-darwin`; other platforms always build locally.
+- Because the repo is private, asset downloads need `gh` authenticated for an account with access (`gh` is in the Brewfile).
 - Pushing a commit/tag that adds or changes `.github/workflows/*` requires a GitHub token (or SSH key) with the `workflow` scope.

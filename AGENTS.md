@@ -28,10 +28,11 @@ the packaging loop discovers any crate with a `[[bin]]` automatically (library c
 like `common` are skipped).
 
 `install.sh` auto-discovers every `[[bin]]` crate under `tools/crates/` and, on Apple
-Silicon macOS, downloads each tool's tarball from the latest release
-(`releases/latest/download/<tool>-aarch64-apple-darwin.tar.gz`) into `tools/bin/`.
-If any download fails, it falls back to building everything from source via
-`make -C tools build`.
+Silicon macOS with `gh` available, downloads each tool's tarball from the latest release
+into `tools/bin/` via `gh release download`. The repo is **private**, so the download is
+authenticated through `gh`; if `gh` is missing or not logged in (e.g. a fresh machine
+before `gh auth login`), it falls back to building everything from source via
+`make -C tools build`. (`gh` is in the Brewfile.)
 
 Caveats:
 - Releases are built only for `aarch64-apple-darwin`; other platforms always build locally.

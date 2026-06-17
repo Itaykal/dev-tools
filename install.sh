@@ -42,14 +42,14 @@ TOOLS_DIR="$REPO_DIR/tools"
 TOOLS_BIN="$TOOLS_DIR/bin"
 TOOLS_PLATFORM="aarch64-apple-darwin"
 
-# Download a tool's asset from the latest release into tools/bin/. All tools share
-# one release, so the auth-free releases/latest/download/<asset> URL is enough.
+# Download a tool's asset from the latest release into tools/bin/. The repo is
+# private, so this goes through `gh` (authenticated); a fresh/unauthenticated
+# machine falls back to building from source below.
 install_prebuilt_tool() {
   local tool="$1"
   local asset="$tool-$TOOLS_PLATFORM.tar.gz"
-  local url="https://github.com/$TOOLS_REPO/releases/latest/download/$asset"
   local tmp; tmp="$(mktemp -d)"
-  if curl -fsSL "$url" -o "$tmp/$asset"; then
+  if gh release download --repo "$TOOLS_REPO" --pattern "$asset" --dir "$tmp" --clobber >/dev/null 2>&1; then
     mkdir -p "$TOOLS_BIN"
     tar -xzf "$tmp/$asset" -C "$TOOLS_BIN"
     chmod +x "$TOOLS_BIN/$tool"
@@ -70,14 +70,14 @@ build_tools_locally() {
   fi
 }
 
-if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]] && command -v gh >/dev/null 2>&1; then
   tools_ok=1
   for manifest in "$TOOLS_DIR"/crates/*/Cargo.toml; do
     grep -q '^\[\[bin\]\]' "$manifest" || continue   # skip library crates (e.g. common)
     tool="${manifest:h:t}"                           # tools/crates/<tool>/Cargo.toml -> <tool>
     install_prebuilt_tool "$tool" || tools_ok=0
   done
-  [[ "$tools_ok" == 1 ]] || build_tools_locally       # any miss → build everything from source
+  [[ "$tools_ok" == 1 ]] || build_tools_locally       # any miss (e.g. gh not authed) → build from source
 else
   build_tools_locally
 fi

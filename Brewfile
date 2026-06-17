@@ -1,4 +1,5 @@
 brew 'fzf'
+brew 'gh'
 brew 'jq'
 brew 'direnv'
 brew 'k9s'
