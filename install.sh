@@ -37,10 +37,33 @@ fi
 brew bundle --file="$REPO_DIR/Brewfile"
 
 echo "==> rust tools"
-if command -v cargo >/dev/null 2>&1; then
+TOOLS_REPO="Itaykal/kalfon-dotfiles"
+TOOLS_ASSET="kalfon-dotfiles-tools-aarch64-apple-darwin.tar.gz"
+TOOLS_BIN="$REPO_DIR/tools/bin"
+
+install_prebuilt_tools() {
+  [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]] || return 1
+  local url="https://github.com/$TOOLS_REPO/releases/latest/download/$TOOLS_ASSET"
+  local tmp; tmp="$(mktemp -d)"
+  if curl -fsSL "$url" -o "$tmp/tools.tar.gz"; then
+    mkdir -p "$TOOLS_BIN"
+    tar -xzf "$tmp/tools.tar.gz" -C "$TOOLS_BIN"
+    chmod +x "$TOOLS_BIN/aws-switch" "$TOOLS_BIN/feature"
+    rm -rf "$tmp"
+    echo "    installed prebuilt binaries from latest release"
+    return 0
+  fi
+  rm -rf "$tmp"
+  return 1
+}
+
+if install_prebuilt_tools; then
+  :
+elif command -v cargo >/dev/null 2>&1; then
+  echo "    no prebuilt match — building locally"
   make -C "$REPO_DIR/tools" build
 else
-  echo "    cargo not found — skipping (brew bundle installs rust; open a new shell and re-run)" >&2
+  echo "    no prebuilt binary and cargo not found — skipping (brew bundle installs rust; open a new shell and re-run)" >&2
 fi
 
 echo "==> linking aws-switch config"
