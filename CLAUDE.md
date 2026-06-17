@@ -29,3 +29,28 @@ macos/              # macOS-only artifacts (LaunchAgents, AppleScripts) — not 
 - `jq` and `fzf` are assumed to be installed. Do not add fallbacks for them.
 - `k9s/` is not sourced by `.entry` (it's not shell). Files there are symlinked into `~/Library/Application Support/k9s/` (e.g. `views.yaml`). Edit only via this repo. Bad column expressions in `views.yaml` fail silently in the UI — check `~/Library/Application Support/k9s/k9s.log` after changes.
 - `macos/` is also not sourced by `.entry`. Each subdir is a self-contained macOS artifact. `install.sh` symlinks LaunchAgent plists into `~/Library/LaunchAgents/` and (re)bootstraps them via `launchctl bootstrap gui/$(id -u)`. Agents that drive UI via System Events need Accessibility permission granted to `/usr/bin/osascript` — macOS will prompt on first run.
+
+## Releasing the Rust tools (`tools/`)
+
+The Rust CLIs under `tools/` (`feature`, `aws-switch`, …) are released **independently — one release per tool**, each with its own version.
+
+To cut a release, push a tag of the form `<tool>-v<version>`:
+
+```sh
+git tag feature-v0.2.0
+git push origin feature-v0.2.0
+```
+
+- `<tool>` must match a binary crate dir under `tools/crates/` (the package/bin/dir names are identical).
+- `<version>` is semver (no leading `v` of its own — the `-v` separator supplies it).
+- Each tool versions on its own timeline; bumping `feature` doesn't touch `aws-switch`.
+
+What happens: `.github/workflows/release.yml` triggers on `*-v*` tags, derives the tool name from the part before `-v`, builds **only that crate** (`cargo build --release -p <tool>` on a `macos-14`/`aarch64-apple-darwin` runner), packages the single binary as `<tool>-aarch64-apple-darwin.tar.gz`, and publishes a GitHub Release for that tag.
+
+**New tools need no workflow edits** — add the binary crate under `tools/crates/<tool>/`, then tag `<tool>-v<version>`. The workflow validates the tag maps to a `[[bin]]` crate and fails the run otherwise.
+
+`install.sh` auto-discovers every `[[bin]]` crate under `tools/crates/` and, on Apple Silicon macOS, downloads each tool's **latest** `<tool>-v*` release into `tools/bin/`. If any tool has no release yet (or a download fails), it falls back to building everything from source via `make -C tools build`.
+
+Caveats:
+- Releases are built only for `aarch64-apple-darwin`; other platforms always build locally.
+- Pushing a commit/tag that adds or changes `.github/workflows/*` requires a GitHub token (or SSH key) with the `workflow` scope.

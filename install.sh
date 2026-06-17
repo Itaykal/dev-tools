@@ -38,32 +38,52 @@ brew bundle --file="$REPO_DIR/Brewfile"
 
 echo "==> rust tools"
 TOOLS_REPO="Itaykal/kalfon-dotfiles"
-TOOLS_ASSET="kalfon-dotfiles-tools-aarch64-apple-darwin.tar.gz"
-TOOLS_BIN="$REPO_DIR/tools/bin"
+TOOLS_DIR="$REPO_DIR/tools"
+TOOLS_BIN="$TOOLS_DIR/bin"
+TOOLS_PLATFORM="aarch64-apple-darwin"
+TOOLS_API="https://api.github.com/repos/$TOOLS_REPO/releases"
 
-install_prebuilt_tools() {
-  [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]] || return 1
-  local url="https://github.com/$TOOLS_REPO/releases/latest/download/$TOOLS_ASSET"
+# Download the latest per-tool release asset (newest <tool>-v* tag) into tools/bin/.
+install_prebuilt_tool() {
+  local tool="$1"
+  local asset="$tool-$TOOLS_PLATFORM.tar.gz"
+  local url
+  url="$(curl -fsSL "$TOOLS_API" \
+    | jq -r --arg p "$tool-v" --arg a "$asset" \
+        'map(select(.tag_name | startswith($p)))[0].assets[]? | select(.name == $a) | .browser_download_url')" || url=""
+  [[ -n "$url" ]] || return 1
   local tmp; tmp="$(mktemp -d)"
-  if curl -fsSL "$url" -o "$tmp/tools.tar.gz"; then
+  if curl -fsSL "$url" -o "$tmp/$asset"; then
     mkdir -p "$TOOLS_BIN"
-    tar -xzf "$tmp/tools.tar.gz" -C "$TOOLS_BIN"
-    chmod +x "$TOOLS_BIN/aws-switch" "$TOOLS_BIN/feature"
+    tar -xzf "$tmp/$asset" -C "$TOOLS_BIN"
+    chmod +x "$TOOLS_BIN/$tool"
     rm -rf "$tmp"
-    echo "    installed prebuilt binaries from latest release"
+    echo "    installed $tool from its latest release"
     return 0
   fi
   rm -rf "$tmp"
   return 1
 }
 
-if install_prebuilt_tools; then
-  :
-elif command -v cargo >/dev/null 2>&1; then
-  echo "    no prebuilt match — building locally"
-  make -C "$REPO_DIR/tools" build
+build_tools_locally() {
+  if command -v cargo >/dev/null 2>&1; then
+    echo "    building locally"
+    make -C "$TOOLS_DIR" build
+  else
+    echo "    cargo not found — skipping (brew bundle installs rust; open a new shell and re-run)" >&2
+  fi
+}
+
+if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
+  tools_ok=1
+  for manifest in "$TOOLS_DIR"/crates/*/Cargo.toml; do
+    grep -q '^\[\[bin\]\]' "$manifest" || continue   # skip library crates (e.g. common)
+    tool="${manifest:h:t}"                           # tools/crates/<tool>/Cargo.toml -> <tool>
+    install_prebuilt_tool "$tool" || tools_ok=0
+  done
+  [[ "$tools_ok" == 1 ]] || build_tools_locally       # any miss → build everything from source
 else
-  echo "    no prebuilt binary and cargo not found — skipping (brew bundle installs rust; open a new shell and re-run)" >&2
+  build_tools_locally
 fi
 
 echo "==> linking aws-switch config"
