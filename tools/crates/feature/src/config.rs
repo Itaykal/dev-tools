@@ -21,6 +21,9 @@ pub struct Config {
     /// How long the cached issue list stays fresh, in seconds (0 disables).
     /// Short by default — Jira issues change often, and `ctrl-r` force-refreshes.
     pub cache_ttl_secs: u64,
+    /// Directory new worktrees are created under (ctrl-enter). `~` is expanded.
+    /// Empty = a sibling of the repo: `<repo>/../<repo-name>-worktrees`.
+    pub worktree_dir: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,6 +51,7 @@ impl Default for Config {
             create: CreateConfig::default(),
             aliases: default_aliases(),
             cache_ttl_secs: 60,
+            worktree_dir: String::new(),
         }
     }
 }

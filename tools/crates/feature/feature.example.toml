@@ -12,6 +12,10 @@ jira_bin = "jira"
 # force-refreshes anytime. 0 disables caching.
 cache_ttl_secs = 60
 
+# Where ctrl-enter creates worktrees. A leading "~/" is expanded. Empty (the
+# default) puts them in a sibling of the repo: <repo>/../<repo-name>-worktrees.
+worktree_dir = ""
+
 [list]
 exclude_statuses = ["Done", "Archived"]
 exclude_types = ["Epic"]

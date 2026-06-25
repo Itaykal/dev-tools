@@ -1,7 +1,8 @@
 //! feature — pick an open Jira issue (or create one) and `git checkout -b
-//! KEY-slug`. A standalone Rust CLI: the list is cached (stale-while-revalidate)
-//! so it shows instantly and refreshes in the background; the description
-//! preview loads async; `ctrl-n` creates; `ctrl-r` force-refreshes.
+//! KEY-slug`, or spin it out into a git worktree (ctrl-enter). A standalone Rust
+//! CLI: the list is cached (stale-while-revalidate) so it shows instantly and
+//! refreshes in the background; the description preview loads async; `ctrl-n`
+//! creates; `ctrl-r` force-refreshes.
 
 mod adf;
 mod config;
@@ -23,7 +24,7 @@ use common::cache;
 use config::Config;
 use jira::Jira;
 use tracker::{CreateRequest, Issue, Tracker};
-use ui::Outcome;
+use ui::{Action, Outcome};
 
 const CACHE_KEY: &str = "issues";
 
@@ -55,6 +56,7 @@ fn run() -> Result<u8> {
     let ttl = Duration::from_secs(cfg.cache_ttl_secs);
     let use_cache = !args.refresh && cfg.cache_ttl_secs > 0;
     let aliases = cfg.aliases.clone();
+    let worktree_dir = cfg.worktree_dir.clone();
     let tracker = Arc::new(Jira::new(cfg));
 
     // Stale-while-revalidate: serve the cached list instantly and refresh in the
@@ -104,8 +106,22 @@ fn run() -> Result<u8> {
         create,
         auto_refresh,
     )? {
-        Outcome::Selected { key, summary } => {
-            vcs::checkout(&vcs::branch(&key, &summary))?;
+        Outcome::Selected {
+            key,
+            summary,
+            action,
+        } => {
+            let branch = vcs::branch(&key, &summary);
+            match action {
+                Action::Branch => vcs::checkout(&branch)?,
+                Action::Worktree => {
+                    let base = (!worktree_dir.is_empty()).then_some(worktree_dir.as_str());
+                    let path = vcs::worktree_add(&branch, base)?;
+                    // The TUI draws to stderr, so stdout carries just the path —
+                    // copy it or `cd "$(feature)"` into the new worktree.
+                    println!("{}", path.display());
+                }
+            }
             Ok(0)
         }
         Outcome::Cancelled => Ok(0),

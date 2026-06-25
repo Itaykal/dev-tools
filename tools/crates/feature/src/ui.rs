@@ -12,10 +12,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use nucleo_matcher::{Config as NucleoConfig, Matcher};
-use ratatui::layout::{Constraint, Layout, Position, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Position, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
-    Block, BorderType, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
+    Block, BorderType, Clear, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
     ScrollbarState, Wrap,
 };
 use ratatui::Frame;
@@ -28,10 +29,22 @@ use crate::filter::{filter_issues, parse_query, RowMatch};
 use crate::markdown;
 use crate::tracker::{kind, CreateRequest, Issue};
 
+/// What to do with the chosen issue: branch in place, or spin it out into its
+/// own git worktree.
+#[derive(Clone, Copy)]
+pub enum Action {
+    Branch,
+    Worktree,
+}
+
 /// What the picker returns. A created issue is reported as `Selected` too — the
-/// caller branches from it either way.
+/// caller acts on it (branch or worktree) either way.
 pub enum Outcome {
-    Selected { key: String, summary: String },
+    Selected {
+        key: String,
+        summary: String,
+        action: Action,
+    },
     Cancelled,
 }
 
@@ -92,6 +105,45 @@ fn viewport_height() -> u16 {
     want.clamp(12.min(rows), rows.max(8))
 }
 
+/// A `width`×`height` rect centered within `area` (clamped to fit).
+fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
+    let w = width.min(area.width);
+    let h = height.min(area.height);
+    Rect {
+        x: area.x + area.width.saturating_sub(w) / 2,
+        y: area.y + area.height.saturating_sub(h) / 2,
+        width: w,
+        height: h,
+    }
+}
+
+/// A modal "button": a rounded box with a centered label. The selected one wears
+/// the accent border + selection background; the other stays muted.
+fn button(f: &mut Frame, area: Rect, label: &str, selected: bool) {
+    let mut block = Block::bordered().border_type(BorderType::Rounded).border_style(
+        if selected {
+            theme::title()
+        } else {
+            theme::border()
+        },
+    );
+    if selected {
+        block = block.style(Style::default().bg(theme::SEL_BG));
+    }
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    let text = if selected {
+        theme::title()
+    } else {
+        theme::muted()
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(label.to_string(), text)))
+            .alignment(Alignment::Center),
+        inner,
+    );
+}
+
 struct App {
     aliases: BTreeMap<String, String>,
     /// Local branch names, for marking issues that already have a branch.
@@ -117,6 +169,14 @@ struct App {
     creating: bool,
     create_summary: String,
     create_rx: Option<Receiver<Result<String>>>,
+    /// A validated create request, parked while the user picks worktree-or-branch.
+    pending_req: Option<CreateRequest>,
+    /// Whether the worktree-or-branch chooser is showing (after ctrl-n).
+    choosing_mode: bool,
+    /// Highlighted option in that chooser: 0 = branch (default), 1 = worktree.
+    mode_selected: usize,
+    /// The action chosen for the in-flight create, applied once it succeeds.
+    pending_action: Action,
 
     help: bool,
     status: String,
@@ -154,6 +214,10 @@ impl App {
             creating: false,
             create_summary: String::new(),
             create_rx: None,
+            pending_req: None,
+            choosing_mode: false,
+            mode_selected: 0,
+            pending_action: Action::Branch,
             help: false,
             status: String::new(),
             tick: 0,
@@ -283,6 +347,7 @@ impl App {
                 self.result = Outcome::Selected {
                     key,
                     summary: std::mem::take(&mut self.create_summary),
+                    action: self.pending_action,
                 };
                 self.done = true;
             }
@@ -300,7 +365,9 @@ impl App {
         }
     }
 
-    fn start_create(&mut self) {
+    /// ctrl-n: validate the query into a create request and, if good, open the
+    /// worktree-or-branch chooser. The actual create runs in `confirm_create`.
+    fn request_create(&mut self) {
         let q = parse_query(&self.query, &self.aliases);
         let summary = q.search.trim().to_string();
         if summary.is_empty() {
@@ -316,19 +383,32 @@ impl App {
             self.status = "cannot create a Sub-task without a parent".into();
             return;
         }
+        self.pending_req = Some(CreateRequest {
+            kind: kind_name,
+            summary,
+        });
+        self.choosing_mode = true;
+        self.mode_selected = 0; // default to branch
+        self.status.clear();
+    }
+
+    /// Kick off the parked create on a background thread, remembering whether the
+    /// new issue should branch or spin out into a worktree once it lands.
+    fn confirm_create(&mut self, action: Action) {
+        let Some(req) = self.pending_req.take() else {
+            return;
+        };
+        let summary = req.summary.clone();
         let (tx, rx) = mpsc::channel();
         let create = Arc::clone(&self.create_fn);
-        let req = CreateRequest {
-            kind: kind_name,
-            summary: summary.clone(),
-        };
         std::thread::spawn(move || {
             let _ = tx.send(create(req));
         });
+        self.choosing_mode = false;
         self.creating = true;
         self.create_summary = summary;
+        self.pending_action = action;
         self.create_rx = Some(rx);
-        self.status.clear();
     }
 
     /// Byte offset into `query` for the current `cursor` char index.
@@ -385,6 +465,36 @@ impl App {
             return;
         }
 
+        // After ctrl-n: pick whether the new issue branches or gets a worktree.
+        // Arrow/tab move the highlight (default branch); enter confirms it.
+        if self.choosing_mode {
+            match k.code {
+                KeyCode::Char('c') if ctrl => self.done = true,
+                KeyCode::Esc => {
+                    self.choosing_mode = false;
+                    self.pending_req = None;
+                }
+                KeyCode::Left | KeyCode::Up => self.mode_selected = 0,
+                KeyCode::Right | KeyCode::Down => self.mode_selected = 1,
+                KeyCode::Tab | KeyCode::BackTab => self.mode_selected ^= 1,
+                KeyCode::Char('h') => self.mode_selected = 0,
+                KeyCode::Char('l') => self.mode_selected = 1,
+                KeyCode::Enter => {
+                    let action = if self.mode_selected == 1 {
+                        Action::Worktree
+                    } else {
+                        Action::Branch
+                    };
+                    self.confirm_create(action);
+                }
+                // Direct shortcuts, too.
+                KeyCode::Char('b') => self.confirm_create(Action::Branch),
+                KeyCode::Char('w') => self.confirm_create(Action::Worktree),
+                _ => {}
+            }
+            return;
+        }
+
         match k.code {
             KeyCode::Esc => {
                 if self.help {
@@ -394,11 +504,19 @@ impl App {
                 }
             }
             KeyCode::Char('c') if ctrl => self.done = true,
+            // enter branches in place; ctrl-enter spins out a worktree (the
+            // latter needs a terminal that supports the keyboard-enhancement
+            // protocol, otherwise it arrives as a plain enter — see term.rs).
             KeyCode::Enter => {
                 if let Some(iss) = self.current_issue() {
                     self.result = Outcome::Selected {
                         key: iss.key.clone(),
                         summary: iss.summary.clone(),
+                        action: if ctrl {
+                            Action::Worktree
+                        } else {
+                            Action::Branch
+                        },
                     };
                     self.done = true;
                 }
@@ -407,7 +525,7 @@ impl App {
             KeyCode::Char('k' | 'p') if ctrl => self.up(),
             KeyCode::Down => self.down(),
             KeyCode::Char('j') if ctrl => self.down(),
-            KeyCode::Char('n') if ctrl => self.start_create(),
+            KeyCode::Char('n') if ctrl => self.request_create(),
             KeyCode::Char('r') if ctrl => self.refresh.trigger(),
             KeyCode::Char('d') if ctrl => {
                 self.preview_scroll = self.preview_scroll.saturating_add(8)
@@ -470,6 +588,73 @@ impl App {
         self.render_left(f, left);
         self.render_right(f, right);
         self.render_footer(f, footer);
+        // A k9s-style centered modal sits on top while the user picks how a
+        // freshly created issue should land (worktree vs. branch).
+        if self.choosing_mode {
+            self.render_mode_modal(f, panes);
+        }
+    }
+
+    /// The worktree-or-branch chooser shown after ctrl-n: a centered popup with
+    /// two selectable buttons (branch is the default; arrows move the highlight).
+    fn render_mode_modal(&self, f: &mut Frame, area: Rect) {
+        let Some(req) = &self.pending_req else {
+            return;
+        };
+        let modal = centered_rect(54, 11, area);
+        f.render_widget(Clear, modal);
+        let block = Block::bordered()
+            .border_type(BorderType::Rounded)
+            .border_style(theme::title())
+            .title_top(Line::from(Span::styled(" new issue ", theme::title())));
+        let inner = block.inner(modal);
+        f.render_widget(block, modal);
+
+        // header (1) · gap · buttons (3) · gap · hint (1), centered vertically.
+        let [_pad, header, _g1, buttons, _g2, hint] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .areas(inner);
+
+        let cap = (inner.width as usize).saturating_sub(6);
+        let summary: String = req.summary.chars().take(cap).collect();
+        let head = Line::from(vec![
+            Span::styled(req.kind.clone(), theme::muted()),
+            Span::styled("  ·  ", theme::footer()),
+            Span::styled(summary, theme::query()),
+        ]);
+        f.render_widget(Paragraph::new(head).alignment(Alignment::Center), header);
+
+        // Two equal buttons with a gap, centered as a group.
+        let bw = 16u16;
+        let gap = 4u16;
+        let group = bw * 2 + gap;
+        let pad = inner.width.saturating_sub(group) / 2;
+        let [_, branch_a, _, wt_a, _] = Layout::horizontal([
+            Constraint::Length(pad),
+            Constraint::Length(bw),
+            Constraint::Length(gap),
+            Constraint::Length(bw),
+            Constraint::Min(0),
+        ])
+        .areas(buttons);
+        button(f, branch_a, "⎇  branch", self.mode_selected == 0);
+        button(f, wt_a, "⧉  worktree", self.mode_selected == 1);
+
+        let hint_line = Line::from(vec![
+            Span::styled("← →", theme::key()),
+            Span::styled(" choose   ", theme::footer()),
+            Span::styled("⏎", theme::key()),
+            Span::styled(" confirm   ", theme::footer()),
+            Span::styled("esc", theme::key()),
+            Span::styled(" cancel", theme::footer()),
+        ]);
+        f.render_widget(Paragraph::new(hint_line).alignment(Alignment::Center), hint);
     }
 
     fn render_left(&mut self, f: &mut Frame, area: Rect) {
@@ -601,6 +786,9 @@ impl App {
                 Span::styled(format!("{} ", spinner::frame(self.tick)), theme::prompt()),
                 Span::styled("creating issue…", theme::muted()),
             ])
+        } else if self.choosing_mode {
+            // The modal owns the prompt; keep the footer quiet underneath it.
+            Line::from("")
         } else if !self.status.is_empty() {
             Line::from(Span::styled(format!(" {}", self.status), theme::muted()))
         } else {
@@ -609,6 +797,8 @@ impl App {
                 Span::styled(" move  ", theme::footer()),
                 Span::styled("⏎", theme::key()),
                 Span::styled(" branch  ", theme::footer()),
+                Span::styled("^⏎", theme::key()),
+                Span::styled(" worktree  ", theme::footer()),
                 Span::styled("^n", theme::key()),
                 Span::styled(" new  ", theme::footer()),
                 Span::styled("^r", theme::key()),
@@ -745,7 +935,8 @@ fn help_text() -> Text<'static> {
         kv("↑ / ctrl-k", "up"),
         kv("↓ / ctrl-j", "down"),
         kv("enter", "branch from issue"),
-        kv("ctrl-n", "create issue from query"),
+        kv("ctrl-enter", "worktree from issue"),
+        kv("ctrl-n", "create issue (then pick worktree/branch)"),
         kv("ctrl-r", "refresh list"),
         kv("esc / ctrl-c", "quit"),
         Line::from(""),

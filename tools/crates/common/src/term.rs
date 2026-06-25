@@ -11,7 +11,11 @@
 use std::io::{self, Stderr};
 
 use anyhow::Result;
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::event::{
+    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+};
+use crossterm::execute;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement};
 use ratatui::{backend::CrosstermBackend, Terminal, TerminalOptions, Viewport};
 
 pub type Tui = Terminal<CrosstermBackend<Stderr>>;
@@ -19,12 +23,23 @@ pub type Tui = Terminal<CrosstermBackend<Stderr>>;
 /// Owns an inline ratatui terminal and restores cooked mode on drop.
 pub struct TermGuard {
     terminal: Tui,
+    /// Whether we pushed the keyboard-enhancement flags (so we only pop when we
+    /// pushed). Enables disambiguating keys like ctrl-enter from plain enter on
+    /// terminals that support the Kitty keyboard protocol.
+    kbd_enhanced: bool,
 }
 
 impl TermGuard {
     /// Enter raw mode and create an inline viewport `height` lines tall.
     pub fn inline(height: u16) -> Result<Self> {
         enable_raw_mode()?;
+        let kbd_enhanced = supports_keyboard_enhancement().unwrap_or(false);
+        if kbd_enhanced {
+            let _ = execute!(
+                io::stderr(),
+                PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+            );
+        }
         let backend = CrosstermBackend::new(io::stderr());
         // If terminal setup fails after raw mode is on, disable it here: the
         // `Drop` guard only runs once `Self` exists, so an early return would
@@ -36,9 +51,15 @@ impl TermGuard {
             },
         )
         .inspect_err(|_| {
+            if kbd_enhanced {
+                let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
+            }
             let _ = disable_raw_mode();
         })?;
-        Ok(Self { terminal })
+        Ok(Self {
+            terminal,
+            kbd_enhanced,
+        })
     }
 
     pub fn terminal(&mut self) -> &mut Tui {
@@ -54,6 +75,9 @@ impl TermGuard {
 
 impl Drop for TermGuard {
     fn drop(&mut self) {
+        if self.kbd_enhanced {
+            let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
+        }
         let _ = disable_raw_mode();
         let _ = self.terminal.show_cursor();
     }
