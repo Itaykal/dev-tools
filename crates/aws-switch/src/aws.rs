@@ -147,12 +147,7 @@ pub fn read_token_record(start_url: Option<&str>) -> Result<Option<CachedToken>>
                 continue;
             }
         }
-        let str_field = |k: &str| {
-            value
-                .get(k)
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-        };
+        let str_field = |k: &str| value.get(k).and_then(|v| v.as_str()).map(str::to_string);
         // expiresAt is RFC3339 UTC, so lexical comparison orders it correctly.
         let expires = str_field("expiresAt").unwrap_or_default();
         if best.as_ref().is_none_or(|b| expires > b.expires_at) {
@@ -506,7 +501,8 @@ mod tests {
 
     #[test]
     fn update_token_json_keeps_old_refresh_when_none() {
-        let original = r#"{"accessToken":"OLD","expiresAt":"2020-01-01T00:00:00Z","refreshToken":"KEEP"}"#;
+        let original =
+            r#"{"accessToken":"OLD","expiresAt":"2020-01-01T00:00:00Z","refreshToken":"KEEP"}"#;
         let out = update_token_json(original, "NEW", "2026-06-21T08:52:26Z", None);
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
         assert_eq!(v["accessToken"], "NEW");
