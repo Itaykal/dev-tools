@@ -107,10 +107,16 @@ pub fn is_clean(wt: &Path) -> Result<bool> {
 
 /// How `wt`'s HEAD relates to its upstream.
 pub fn push_state(wt: &Path) -> PushState {
-    if !git_ok(wt, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]) {
+    if !git_ok(
+        wt,
+        &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+    ) {
         return PushState::NoUpstream;
     }
-    match git(wt, &["rev-list", "--count", "@{u}..HEAD"]).ok().and_then(|s| s.parse::<u64>().ok()) {
+    match git(wt, &["rev-list", "--count", "@{u}..HEAD"])
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+    {
         Some(0) => PushState::Pushed,
         Some(n) => PushState::Ahead(n),
         None => PushState::NoUpstream,

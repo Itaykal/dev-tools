@@ -16,8 +16,8 @@ use ratatui::layout::{Alignment, Constraint, Layout, Position, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
-    Block, BorderType, Clear, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
-    ScrollbarState, Wrap,
+    Block, BorderType, Clear, List, ListItem, ListState, Paragraph, Scrollbar,
+    ScrollbarOrientation, ScrollbarState, Wrap,
 };
 use ratatui::Frame;
 
@@ -122,13 +122,13 @@ fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
 /// A modal "button": a rounded box with a centered label. The selected one wears
 /// the accent border + selection background; the other stays muted.
 fn button(f: &mut Frame, area: Rect, label: &str, selected: bool) {
-    let mut block = Block::bordered().border_type(BorderType::Rounded).border_style(
-        if selected {
+    let mut block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(if selected {
             theme::title()
         } else {
             theme::border()
-        },
-    );
+        });
     if selected {
         block = block.style(Style::default().bg(theme::SEL_BG));
     }
@@ -550,9 +550,7 @@ impl App {
                 self.preview_scroll = self.preview_scroll.saturating_sub(16)
             }
             KeyCode::Left => self.cursor = self.cursor.saturating_sub(1),
-            KeyCode::Right => {
-                self.cursor = (self.cursor + 1).min(self.query.chars().count())
-            }
+            KeyCode::Right => self.cursor = (self.cursor + 1).min(self.query.chars().count()),
             KeyCode::Home => self.cursor = 0,
             KeyCode::Char('a') if ctrl => self.cursor = 0,
             KeyCode::End => self.cursor = self.query.chars().count(),
@@ -844,7 +842,11 @@ fn wrapped_height(text: &Text, width: u16) -> usize {
         .iter()
         .map(|line| {
             let lw = line.width();
-            if lw == 0 { 1 } else { lw.div_ceil(w) }
+            if lw == 0 {
+                1
+            } else {
+                lw.div_ceil(w)
+            }
         })
         .sum::<usize>()
         .max(1)

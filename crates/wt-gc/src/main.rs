@@ -116,15 +116,20 @@ fn cmd_run(cfg: &Config) -> Result<()> {
     let mut review = 0usize;
     for c in &cands {
         match c.bucket {
-            Bucket::Auto => match trash::trash(&c.repo, &c.repo_name, &c.branch, &c.path, &trash_dir)
-            {
-                Ok(entry) => {
-                    log.line(&format!("trashed {} → {}", c.path.display(), entry.trashed_path));
-                    manifest.entries.push(entry);
-                    trashed += 1;
+            Bucket::Auto => {
+                match trash::trash(&c.repo, &c.repo_name, &c.branch, &c.path, &trash_dir) {
+                    Ok(entry) => {
+                        log.line(&format!(
+                            "trashed {} → {}",
+                            c.path.display(),
+                            entry.trashed_path
+                        ));
+                        manifest.entries.push(entry);
+                        trashed += 1;
+                    }
+                    Err(e) => log.line(&format!("FAILED to trash {}: {e:#}", c.path.display())),
                 }
-                Err(e) => log.line(&format!("FAILED to trash {}: {e:#}", c.path.display())),
-            },
+            }
             Bucket::Confirm => {
                 review += 1;
                 log.line(&format!(
@@ -146,7 +151,10 @@ fn cmd_run(cfg: &Config) -> Result<()> {
 /// `wt-gc review` — confirm each dirty/unpushed stale worktree before trashing.
 fn cmd_review(cfg: &Config) -> Result<()> {
     let cands = scan(cfg);
-    let pending: Vec<&Candidate> = cands.iter().filter(|c| c.bucket == Bucket::Confirm).collect();
+    let pending: Vec<&Candidate> = cands
+        .iter()
+        .filter(|c| c.bucket == Bucket::Confirm)
+        .collect();
     if pending.is_empty() {
         println!("Nothing to review — no stale worktrees with pending work.");
         return Ok(());
@@ -200,7 +208,10 @@ fn cmd_list(cfg: &Config) -> Result<()> {
         }
     };
     show(Bucket::Auto, "would auto-trash (stale, clean, pushed):");
-    show(Bucket::Confirm, "needs review (stale, but has pending work):");
+    show(
+        Bucket::Confirm,
+        "needs review (stale, but has pending work):",
+    );
     show(Bucket::Skip, "keeping (active):");
     Ok(())
 }

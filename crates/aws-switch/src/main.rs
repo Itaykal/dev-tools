@@ -130,9 +130,14 @@ fn run() -> Result<u8> {
         return Ok(1); // cancelled
     };
 
-    let roles = with_login_retry(&cfg, start_url, &region, &mut token, "Loading roles…", |t| {
-        aws::list_roles(t, &region, &account.account_id)
-    })?;
+    let roles = with_login_retry(
+        &cfg,
+        start_url,
+        &region,
+        &mut token,
+        "Loading roles…",
+        |t| aws::list_roles(t, &region, &account.account_id),
+    )?;
     let role = match select_role(&cfg, roles)? {
         Some(role) => role,
         None => return Ok(1), // cancelled or no roles

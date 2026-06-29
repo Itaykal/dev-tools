@@ -101,8 +101,17 @@ mod tests {
             bucket: Bucket::Confirm,
         };
         assert!(c(true, PushState::Pushed).reasons().is_empty());
-        assert_eq!(c(false, PushState::Pushed).reasons(), ["uncommitted changes"]);
-        assert_eq!(c(true, PushState::Ahead(2)).reasons(), ["2 unpushed commit(s)"]);
-        assert_eq!(c(true, PushState::NoUpstream).reasons(), ["no upstream branch"]);
+        assert_eq!(
+            c(false, PushState::Pushed).reasons(),
+            ["uncommitted changes"]
+        );
+        assert_eq!(
+            c(true, PushState::Ahead(2)).reasons(),
+            ["2 unpushed commit(s)"]
+        );
+        assert_eq!(
+            c(true, PushState::NoUpstream).reasons(),
+            ["no upstream branch"]
+        );
     }
 }
